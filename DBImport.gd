@@ -1,4 +1,4 @@
-#V1.00
+#V1.20: Displays of the same slot share a public RemoteTransform2D
 
 @tool
 extends Node2D
@@ -308,23 +308,29 @@ func dbimport(val):
 
 			for j in json_result.armature[i].skin.size():
 				for k in json_result.armature[i].skin[j].slot.size():
-					if json_result.armature[i].skin[j].slot[k].has("display"):
+
+					var slot = json_result.armature[i].skin[j].slot[k]
+					var slotNode = skeleton.find_child("SLOTS",false).find_child(slot.name,false)
+					if slotNode == null:
+						print_debug("slotNode is null: "+slot.name);
+
+					if slot.has("display"):
 						var display;
-						for d in json_result.armature[i].skin[j].slot[k].display.size():
-							if json_result.armature[i].skin[j].slot[k].display[d].has("type"):
-								if json_result.armature[i].skin[j].slot[k].display[d].type == "mesh" || json_result.armature[i].skin[j].slot[k].display[d].type == "boundingBox" :
-									var display_json = json_result.armature[i].skin[j].slot[k].display[d]
+						for d in slot.display.size():
+							var display_json = json_result.armature[i].skin[j].slot[k].display[d]
+							if slot.display[d].has("type"): # this display is not an ordinary sprite
+								if slot.display[d].type == "mesh" || slot.display[d].type == "boundingBox" :									
 									display = Polygon2D.new();
-									var s_name = json_result.armature[i].skin[j].slot[k].display[d].name
+									var s_name = display_json.name
 									if s_name.rfind("/")!=-1:
 										s_name = s_name.substr(s_name.rfind("/")+1)
 									display.set_name(s_name)
 
 									if display_json.type == "mesh":
-										if(json_result.armature[i].skin[j].slot[k].display[d].has("path")):
-											set_texture(display,json_result.armature[i].skin[j].slot[k].display[d].path)
+										if(display_json.has("path")):
+											set_texture(display,display_json.path)
 										else:
-											set_texture(display,json_result.armature[i].skin[j].slot[k].display[d].name)
+											set_texture(display,display_json.name)
 
 										var true_oder = PackedVector2Array()
 
@@ -361,15 +367,16 @@ func dbimport(val):
 												iter += 1
 											display.set_uv(uvs);
 
-										if json_result.armature[i].skin[j].slot[k].display[d].has("weights"):
-											var arr = json_result.armature[i].skin[j].slot[k].display[d].weights;
+										if display_json.has("weights"):
+											var arr = display_json.weights;
 											var bones = {}
 											var index = 0;
 											var vert_num = 0;
 											while index<arr.size():
 												var affected=arr[index]*2
 												for w_bone in range(1,affected,2):
-													var bone_path=skeleton.find_child(json_result.armature[i].bone[arr[index+w_bone]].name).get_path();
+													#var bone_path=skeleton.find_child(json_result.armature[i].bone[arr[index+w_bone]].name).get_path();
+													var bone_path = skeleton.get_path_to(skeleton.find_child(json_result.armature[i].bone[arr[index+w_bone]].name));
 													if not (bones.has(bone_path)):
 														bones[bone_path] = [];
 														bones[bone_path].resize(display.polygon.size())
@@ -382,16 +389,18 @@ func dbimport(val):
 										else:
 											for sl in json_result.armature[i].slot.size():
 												if json_result.armature[i].slot[sl].name==json_result.armature[i].skin[j].slot[k].name:
-													var bone_path = skeleton.find_child(json_result.armature[i].slot[sl].parent).get_path();
+													#var bone_path = skeleton.find_child(json_result.armature[i].slot[sl].parent).get_path();
+													var bone_path = skeleton.get_path_to(skeleton.find_child(json_result.armature[i].slot[sl].parent));
 													var wbone = []
 													wbone.resize(display.polygon.size());
 													wbone.fill(1.0)
 													display.add_bone(bone_path,wbone);
-											display.set_skeleton(skeleton.get_path())
+											#display.set_skeleton(skeleton.get_path())
+											display.set_skeleton(display.get_path_to(skeleton))
 										var trans = Transform2D()
 
 										skeleton.find_child("SLOTS",false).find_child(json_result.armature[i].skin[j].slot[k].name,false).add_child(display)
-										if json_result.armature[i].skin[j].slot[k].display[d].has("weights"):
+										if display_json.has("weights"):
 											display.position=Vector2(0,0)
 										else:
 											for sl in json_result.armature[i].slot.size():
@@ -403,9 +412,10 @@ func dbimport(val):
 													display.set_polygon(vec);
 													vec.clear();
 
-										display.set_skeleton(skeleton.get_path())
-										if(json_result.armature[i].skin[j].slot[k].display[d].has("path")):
-											set_texture(display,json_result.armature[i].skin[j].slot[k].display[d].path)
+										#display.set_skeleton(skeleton.get_path())
+										display.set_skeleton(display.get_path_to(skeleton))
+										if(display_json.has("path")):
+											set_texture(display,display_json.path)
 										else:
 											set_texture(display)
 										display.owner = get_tree().edited_scene_root
@@ -427,37 +437,38 @@ func dbimport(val):
 										for sl in json_result.armature[i].slot.size():
 											display.transform=skeleton.find_child(json_result.armature[i].slot[sl].parent).get_global_transform()
 											if json_result.armature[i].slot[sl].name==json_result.armature[i].skin[j].slot[k].name:
-												var bone_path = skeleton.find_child(json_result.armature[i].slot[sl].parent).get_path();
+												#var bone_path = skeleton.find_child(json_result.armature[i].slot[sl].parent).get_path();
+												var bone_path = skeleton.get_path_to(skeleton.find_child(json_result.armature[i].slot[sl].parent));
 												var bone_weights = []
 												for bw in display.polygon.size():
 													bone_weights.push_back(1);
 												display.add_bone(bone_path,bone_weights);
 										skeleton.find_child("SLOTS",false).find_child(json_result.armature[i].skin[j].slot[k].name,false).add_child(display)
-										display.set_skeleton(skeleton.get_path())
+										#display.set_skeleton(skeleton.get_path())
+										display.set_skeleton(display.get_path_to(skeleton))
 
 										display.owner = get_tree().edited_scene_root
-								if json_result.armature[i].skin[j].slot[k].display[d].type == "armature":
+								if slot.display[d].type == "armature":
 									pass
 
-							else:
+							else:  # this display is a sprite
 								display = Sprite2D.new()
-
-								if json_result.armature[i].skin[j].slot[k].display[d].has("transform"):
+								if display_json.has("transform"):
 									display.position=Vector2(0,0)
-									if json_result.armature[i].skin[j].slot[k].display[d].transform.has("x"):
-										display.position.x=json_result.armature[i].skin[j].slot[k].display[d].transform.x
-									if json_result.armature[i].skin[j].slot[k].display[d].transform.has("y"):
-										display.position.y=json_result.armature[i].skin[j].slot[k].display[d].transform.y
+									if display_json.transform.has("x"):
+										display.position.x=display_json.transform.x
+									if display_json.transform.has("y"):
+										display.position.y=display_json.transform.y
 
-								var s_name = json_result.armature[i].skin[j].slot[k].display[d].name
+								var s_name = display_json.name
 								if s_name.rfind("/")!=-1:
 									s_name = s_name.substr(s_name.rfind("/")+1)
 								display.set_name(s_name);
 
-								if(json_result.armature[i].skin[j].slot[k].display[d].has("path")):
-									set_texture(display,json_result.armature[i].skin[j].slot[k].display[d].path)
+								if(display_json.has("path")):
+									set_texture(display,display_json.path)
 								else:
-									set_texture(display,json_result.armature[i].skin[j].slot[k].display[d].name)
+									set_texture(display,display_json.name)
 
 								var p_bone;
 
@@ -465,30 +476,31 @@ func dbimport(val):
 									if json_result.armature[i].slot[sl].name==json_result.armature[i].skin[j].slot[k].name:
 										p_bone = skeleton.find_child(json_result.armature[i].slot[sl].parent)
 										break;
-
-								if json_result.armature[i].skin[j].slot[k].display[d].has("transform"):
-									if json_result.armature[i].skin[j].slot[k].display[d].transform.has("skX"):
-										display.set_rotation_degrees((json_result.armature[i].skin[j].slot[k].display[d].transform.skX))
-									if json_result.armature[i].skin[j].slot[k].display[d].transform.has("scX"):
-										display.scale.x=json_result.armature[i].skin[j].slot[k].display[d].transform.scX
-									if json_result.armature[i].skin[j].slot[k].display[d].transform.has("scY"):
-										display.scale.y=json_result.armature[i].skin[j].slot[k].display[d].transform.scY
-								display.transform=p_bone.global_transform*display.transform;
-								skeleton.find_child("SLOTS",false).find_child(json_result.armature[i].skin[j].slot[k].name,false).add_child(display)
-
+#===============Edited in V1.20=================
+								#if parent slot doesn't have a remote, create one
 								var remote = null;
 								for c in p_bone.get_children():
-									if c is RemoteTransform2D && c.name == display.name:
+									if c is RemoteTransform2D && c.name == slot.name:
 										remote = c;
 								if remote == null:
 									remote = RemoteTransform2D.new()
-									remote.set_name(display.name)
+									remote.set_name(slot.name)
 									p_bone.add_child(remote);
-									remote.set_global_transform(display.get_global_transform());
-									remote.remote_path=remote.get_path_to(display)
+									remote.set_global_transform(p_bone.get_global_transform());
+									remote.remote_path=remote.get_path_to(slotNode)									
+									#slotNode.set_global_transform(remote.get_global_transform());
 									remote.owner = get_tree().edited_scene_root
+								if display_json.has("transform"):
+									if display_json.transform.has("skX"):
+										display.set_rotation_degrees((display_json.transform.skX))
+									if display_json.transform.has("scX"):
+										display.scale.x=display_json.transform.scX
+									if display_json.transform.has("scY"):
+										display.scale.y=display_json.transform.scY
+								#display.transform=p_bone.global_transform*display.transform;
+								slotNode.add_child(display)
 								display.owner = get_tree().edited_scene_root
-
+#===============End of Edition in V1.20=================
 			var slots = masterslot.get_children();
 			slotscript = load("res://addons/DBI/slot.gd")
 			for sl in slots.size():
@@ -716,7 +728,6 @@ func dbimport(val):
 							frames.push_back(keyframe)
 							write_head+=an.ffd[ffdi].frame[f].duration*framerate
 						
-						#print(frames);  #111
 						for f in range(0,frames.size(),2):
 							if(f!=0):
 								if(f+3<frames.size()):
